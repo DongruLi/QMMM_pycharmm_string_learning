@@ -1,0 +1,214 @@
+---
+layout: default
+title: Obtain the chemical free-energy profile
+parent: String Method
+grand_parent: Sampling Methods
+nav_order: 4
+---
+
+# Obtain the Chemical Free-Energy Profile
+
+After the string has been updated through multiple iterations, the free-energy profile along the reaction path can be obtained from the output of the string analysis.
+
+In this workflow, the free-energy data are generated during the same analysis step used to update the string.
+
+---
+
+## 1. Generate the free-energy data
+
+After the restrained MD simulations for all 21 images are completed, run:
+
+```bash
+./evolve_z_path_bond_ang_dihe_skip2000.exe \
+restraints.txt z${j}.txt > log_${itr}.out
+```
+
+As introduced in the previous section, this program generates:
+
+```text
+znew.txt
+df.txt
+```
+
+`znew.txt` contains the updated string coordinates and is used for the next string iteration.
+
+`df.txt` contains the free-energy profile calculated for the current iteration.
+
+The files can be renamed according to the iteration number:
+
+```bash
+mv znew.txt z${itr}.txt
+mv df.txt df_${itr}.txt
+```
+
+For example:
+
+```text
+df_1.txt
+df_2.txt
+...
+df_N.txt
+```
+
+Use the `df_N.txt` file from the final converged string iteration to obtain the final free-energy profile.
+
+---
+
+## 2. Read the free-energy data
+
+A `df_N.txt` file contains two columns. For example:
+
+```text
+0.00000      0.00000
+0.01613      0.26325
+0.03226      0.56728
+0.04839      0.92755
+0.06452      1.34247
+...
+```
+
+The two columns represent:
+
+| Column | Description |
+| --- | --- |
+| 1 | Normalized reaction coordinate along the string |
+| 2 | Free energy (kcal/mol) |
+
+The reaction coordinate is normalized from 0 to 1, representing progression along the reaction path.
+
+---
+
+## 3. Plot the free-energy profile
+
+The data can be loaded directly with NumPy:
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+data = np.loadtxt("df_N.txt")
+
+reaction_coordinate = data[:, 0]
+free_energy = data[:, 1]
+
+plt.plot(reaction_coordinate, free_energy)
+
+plt.xlabel("Reaction coordinate")
+plt.ylabel("Free energy (kcal/mol)")
+
+plt.tight_layout()
+plt.show()
+```
+
+The resulting curve represents the chemical free-energy profile along the string:
+
+```text
+Free energy
+    ^
+    |                  TS
+    |                 /\
+    |                /  \
+    |               /    \
+    |              /      \
+    |_____________/        \________
+    | Reactant                 Product
+    +------------------------------------> Reaction coordinate
+              0                         1
+```
+
+---
+
+## 4. Obtain the activation free energy
+
+The activation free energy is the free-energy difference between the reactant state and the highest point along the reaction path:
+
+$$
+\Delta G^\ddagger
+=
+G_{\mathrm{TS}} - G_{\mathrm{reactant}}
+$$
+
+If the reactant state is set to zero, the activation free energy can be read directly from the maximum of the free-energy profile.
+
+For example, the maximum value can be found with:
+
+```python
+ts_index = np.argmax(free_energy)
+
+ts_coordinate = reaction_coordinate[ts_index]
+barrier = free_energy[ts_index]
+
+print("TS reaction coordinate:", ts_coordinate)
+print("Activation free energy:", barrier, "kcal/mol")
+```
+
+The product free energy can also be obtained from the end of the profile:
+
+```python
+reaction_free_energy = free_energy[-1] - free_energy[0]
+
+print(
+    "Reaction free energy:",
+    reaction_free_energy,
+    "kcal/mol"
+)
+```
+
+---
+
+## 5. Check the string iterations
+
+The free-energy profile can be compared between different string iterations:
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+for itr in [1, 2, 3, 4, 5]:
+
+    data = np.loadtxt(f"df_{itr}.txt")
+
+    plt.plot(
+        data[:, 0],
+        data[:, 1],
+        label=f"Iteration {itr}"
+    )
+
+plt.xlabel("Reaction coordinate")
+plt.ylabel("Free energy (kcal/mol)")
+plt.legend()
+
+plt.tight_layout()
+plt.show()
+```
+
+If the string is converged, the free-energy profiles from the later iterations should show only small changes.
+
+The final converged profile is then used to report the chemical activation free energy.
+
+---
+
+## Workflow summary
+
+```text
+21 restrained QM/MM MD simulations
+                 |
+                 v
+evolve_z_path_bond_ang_dihe_skip2000.exe
+                 |
+          +------+------+
+          |             |
+          v             v
+      znew.txt        df.txt
+          |             |
+          v             v
+       zN.txt        df_N.txt
+                        |
+                        v
+              Free-energy profile
+                        |
+                        v
+                 ΔG‡ and ΔG_rxn
+```
+
+This completes the string-method calculation of the chemical free-energy profile.
