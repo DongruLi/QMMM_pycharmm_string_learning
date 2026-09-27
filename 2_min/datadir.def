@@ -1,0 +1,6 @@
+* CHARMM testcase data directory assignment
+*
+faster on
+set 0 toppar/     ! input data directory
+set 9 scratch/  ! scratch directory
+return

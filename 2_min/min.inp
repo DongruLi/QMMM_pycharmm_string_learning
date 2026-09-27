@@ -1,0 +1,82 @@
+* gen3.inp - water dynamics to relax
+* sbound add water sphere of 25 A
+*
+
+bomblev -1
+  
+stream datadir.def
+
+!
+! Read topology and parameter files
+! -------------
+stream toppar.str
+
+! read in the psf file
+!----------------------
+open read form unit 1 name  ../../charmm-gui-3767440248/step3_pbcsetup.psf
+read psf card unit 1
+close unit 1
+
+! read in coordinate file (betaE with MTP bound)
+!---------------------------------------------------------
+open read form unit 1 name  ../../charmm-gui-3767440248/step3_pbcsetup.crd
+read coord card unit 1
+close unit 1
+
+! Set-up image information for tetragonal eriodic boundaries
+!-----------------------------------------------------------------
+set 6 83.0
+set 7 83.0
+set 8 83.0
+
+!define the crystal lattice type and geometry
+!-----------------------------------------------
+crystal define cubi  @6 @7 @8  90.0  90.0  90.0
+
+! build the crystal along with the images within the cutoff
+crystal build Noper 0 cutoff 20.0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid PROA .or. segid PROB .or. segid PROC .or. segid HETA end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid WATA .or. segid WATB .or. segid WATC .or. segid SOLV .or. segid IONS end
+
+! For soft core with correct analytic gradient
+!--------------------------------------------------------------
+!nbon nbxmod 5 atom cdiel fshift vatom vshift -
+!cutnb 14.0 ctofnb 13.0 ctonnb 12.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+! atom based, but mndo97 doc indicates that this includes all MM atoms
+!---------------------------------------------------------------------
+!nbon nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+!cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+! use the MNDO97-Ewald suggested group based cutoff
+!---------------------------------------------------------------
+update -
+    elec group switch cdie eps 1. -
+    ewald KAPPA 0.34 spline PMEWald ORDEr 6 -
+    FFTX 90 FFTY 90 FFTZ 90 -
+    vdw vgroup vswitch -
+    cutnb 14.0 ctofnb 13.0 ctonnb 12.0  -
+    inbfrq 25 cutim 14.0 imgfrq 25 wmin 0.5
+
+! exclude the reactive water
+define solv sele segid WATA .or. segid WATB .or. segid WATC .or. segid SOLV .or. segid IONS end
+
+define qm sele segid HETA end
+
+mndo remo sele qm end GLNK sele none end sele none end am1 char -2 switch
+
+shake bonh para tol 1.0e-6 sele all end  sele  (.not. qm .and. hydrogen) end
+
+mini abnr nstep 50 tolgrd 0.2
+
+open write form unit 1 name min.pdb
+write coor pdb unit 1
+close unit 1
+
+open write form unit 1 name min.crd
+write coor card unit 1
+close unit 1
+
+stop
+
