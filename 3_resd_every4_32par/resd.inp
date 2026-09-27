@@ -1,0 +1,99 @@
+* gen3.inp - water dynamics to relax
+* sbound add water sphere of 25 A
+*
+
+bomblev -2
+  
+stream datadir.def
+
+!
+! Read topology and parameter files
+! -------------
+stream toppar.str
+
+! read in the psf file
+!----------------------
+open read form unit 1 name  ../../charmm-gui-3767440248/step3_pbcsetup.psf
+read psf card unit 1
+close unit 1
+
+open read form unit 1 name ../../charmm-gui-3767440248/step3_pbcsetup.crd
+read coor card unit 1
+close unit 1
+
+! Set-up image information for tetragonal eriodic boundaries
+!-----------------------------------------------------------------
+set 6 83.0
+set 7 83.0
+set 8 83.0
+
+!define the crystal lattice type and geometry
+!-----------------------------------------------
+crystal define cubi  @6 @7 @8  90.0  90.0  90.0
+
+! build the crystal along with the images within the cutoff
+crystal build Noper 0 cutoff 20.0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid PROA .or. segid PROB .or. segid PROC .or. segid HETA end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid SOLV .or. segid WATA .or. segid WATB .or. segid WATC .or. segid IONS end
+
+! For soft core with correct analytic gradient
+!--------------------------------------------------------------
+!nbon nbxmod 5 atom cdiel fshift vatom vshift -
+!cutnb 14.0 ctofnb 13.0 ctonnb 12.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+! atom based, but mndo97 doc indicates that this includes all MM atoms
+!---------------------------------------------------------------------
+!nbon nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+!cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+! use the MNDO97-Ewald suggested group based cutoff
+!---------------------------------------------------------------
+update -
+    elec group switch cdie eps 1. -
+    ewald KAPPA 0.34 spline PMEWald ORDEr 6 -
+    FFTX 90 FFTY 90 FFTZ 90 -
+    vdw vgroup vswitch -
+    cutnb 14.0 ctofnb 13.0 ctonnb 12.0  -
+    inbfrq 25 cutim 14.0 imgfrq 25 wmin 0.5
+
+! exclude the reactive water
+define solv sele segid SOLV .or. segid WATA .or. segid WATB .or. segid WATC .or. segid IONS end
+
+define qm sele segid HETA end
+
+mndo remo sele qm end GLNK sele none end sele none end am1 char -2 switch
+
+shake bonh para tol 1.0e-6 sele all end  sele  (.not. qm .and. hydrogen) end
+
+! fix a smaller region
+!---------------------------------
+cons fix sele .not. ( .byres. ( (segid HETA .and. resid 223 .and. type O4) .around. 10.0 ) ) end
+
+!--------resd
+open write unform unit 31 name resd_0.dcd
+trajectory iwrite 31 nwrite 1 nfile 65
+set atom1 HETA 223 C1
+set atom2 HETA 223 C8
+set atom3 HETA 223 C3
+set atom4 HETA 223 O4
+! rc=R(C1-C8) - R(C3-04)
+set rc -2.0
+set n 1
+label loop
+   skip none
+   resdistance reset
+   resdistance kval 2000.0 rval @rc -
+   1.0 @atom1 @atom2 -1.0 @atom3 @atom4
+   mini abnr nstep 2000 tolitr 2000 tolgrd 0.2 nprint 2000
+   skip resd
+   energy
+   print resdistance
+   trajectory write
+   increase n by 1
+   increase rc by 0.1
+if rc le 2.0 goto loop
+
+
+stop
+

@@ -1,0 +1,17 @@
+#!/bin/tcsh
+#SBATCH -J cm_pbc_resd
+#SBATCH -A r00051
+#SBATCH -p debug
+#SBATCH -o mpi_%j.txt
+#SBATCH -e mpi_%j.err
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=lidongru2020@outlook.com
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --time=0:59:00
+
+cd $SLURM_SUBMIT_DIR
+
+/N/u/dl66/Quartz/c48a1_gnu_mndo97_poam_quartz/bin/charmm <resd.inp> resd.out 
+
+
